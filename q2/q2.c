@@ -1,12 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <time.h>
 
 # define MAX_SIZE 100
-
-pthread_t threads[2];
-//thread[0] no lado esquerdo
-//thread[1] no lado direito
 
 typedef struct arguments {
 	int left;
@@ -14,95 +12,159 @@ typedef struct arguments {
 	int thread_number;
 } Parameters;
 
-typedef struct partition {
-	int pivot;
-	int i;
-	int j;
-} Partition;
+// Array de testes
+int default_array[] = {-11,-9,1,-4,14,3,24,-6,-8,-17,9,25,20,-24,-13,10,17,-19,8,21};
+int array[MAX_SIZE];
+//int array[] = {14,16,26,21,39,28,49,19,17,8,34,50,45,1,12,35,42,6,33,46};
+int SLEEP_TIME = 0;
 
-//int array[] = {-11,-9,1,-4,14,3,24,-6,-8,-17,9,25,20,-24,-13,10,17,-19,8,21};
-int array[] = {14,16,26,21,39,28,49,19,17,8,34,50,45,1,12,35,42,6,33,46};
-void swap(int a, int b) {int aux=array[a]; array[a]=array[b]; array[b]=aux;}
+void print_array(int high, int i, int j) {
+	printf("[");
+	int k;
+	for(k=0; k<high+1; k++) {
+		printf(" %d", array[k]);
+		
+		// São marcados com * os números que serão trocados no swap
+		if(k==i || k==j)
+			printf("*");
+	}
+	printf(" ]\n");
+	sleep(SLEEP_TIME);
+}
 
-Partition partition(int l, int r) {
-	Partition ans;
-	ans.pivot = array[l];
-	ans.i = l-1, ans.j = r+1;
+void swap(int high, int i, int j) {
+	print_array(high, i, j);
+	
+	int aux=array[i];
+	array[i]=array[j];
+	array[j]=aux;
+}
+
+int partition(int l, int r) {
+	int pivot = array[l];
+	int i = l, j = r+1;
 	
 	while(1) {
 		
 		// Elemento mais a esquerda maior ou igual ao pivot
-		do ans.i++; while(array[ans.i]<ans.pivot);
+		do i++; while(array[i]<pivot && i<r);
 		// Elemento mais a direita menor ou igual ao pivot
-		do ans.j--; while(array[ans.j]>ans.pivot);
+		do j--; while(array[j]>pivot);
 		
-		if(ans.i>=ans.j)
-			return ans;
-			
-		swap(ans.i, ans.j);
+		swap(r, i, j);
+				
+		if(i>=j) {
+			printf("[Desfazendo swap quando %d>=%d]\n", array[i], array[j]);
+			printf("[i=%d   j=%d]\n", i, j);
+			swap(r, i, j);
+			swap(r, l, j);
+			return j;
+		}
 	}	
 }
 
 void quicksort(int l, int r, int thread_number) {
-	Partition a = partition(l, r);
-	int pivot = a.pivot, i = a.i, j = a.j;
-	
-	printf("[Thread %d] left=%d\tpivot=%d\tright=%d\n", thread_number, l, pivot, r);
-	
-	if(j>l)
-		quicksort(l, j-1, thread_number);
+	if(l < r) {
+		printf("[On thread %d][left=%d   right=%d]\n", thread_number, l, r);
 		
-	if(i<r)
-		quicksort(j+1, r, thread_number);
+		int pivot = partition(l, r);
+		quicksort(l, pivot-1, thread_number);
+		quicksort(pivot+1, r, thread_number);
+	}
 }
 
 void *threaded_quicksort(void *in) {
 	Parameters* parameters = in;
-	int l = parameters->left, r = parameters->right;
+	int l = parameters->left,
+		r = parameters->right;
 	
-	Partition a = partition(l, r);
-	int pivot = a.pivot, i = a.i, j = a.j;
-	
-	printf("[Thread %d] left=%d\tpivot=%d\tright=%d\n", parameters->thread_number, l, pivot, r);
-	
-	if(j>l)
-		quicksort(l, j-1, parameters->thread_number);
+	if(l < r) {
+		printf("[On thread %d][left=%d   right=%d]\n", parameters->thread_number, l, r);
 		
-	if(i<r)
-		quicksort(j+1, r, parameters->thread_number);
+		int pivot = partition(l, r);
+		quicksort(l, pivot-1, parameters->thread_number);
+		quicksort(pivot+1, r, parameters->thread_number);
+	}
 }
 
-void begin_quicksort(int n) {
-	Partition a = partition(0, n);
+void *begin_quicksort(void *in) {
+	Parameters* initial_parameters = in;
+	int l = initial_parameters->left,
+		r = initial_parameters->right;
+
+	int pivot = partition(l, r);
 	Parameters parameters[2];
 	
-	parameters[0].left = 0;			parameters[0].right = a.pivot;	parameters[0].thread_number=0;
-	parameters[1].left = a.pivot+1;	parameters[1].right = n;			parameters[1].thread_number=1;
+	parameters[0].left = l;			parameters[0].right = pivot;		parameters[0].thread_number=0;
+	parameters[1].left = pivot+1;	parameters[1].right = r;			parameters[1].thread_number=1;
 	
-	printf("[Begin] left=%d\tpivot=%d\tright=%d\n", 0, a.pivot, n);
+	printf("[Start][left=%d   right=%d]\n", l, r);
+	//print_array(r);
+	pthread_t threads[2];
+	//thread[0] no lado esquerdo
+	//thread[1] no lado direito
 	
-	if(a.j>0)
-		pthread_create(&threads[0], NULL, threaded_quicksort, &parameters[0]);
-		//quicksort(0, a.j);
-		
-	if(a.i<n)
-		pthread_create(&threads[1], NULL, threaded_quicksort, &parameters[1]);
-		//quicksort(a.j+1, n);
+	pthread_create(&threads[0], NULL, threaded_quicksort, &parameters[0]);
+	pthread_create(&threads[1], NULL, threaded_quicksort, &parameters[1]);
 		
 	pthread_join(threads[0], NULL);
     pthread_join(threads[1], NULL);
 }
 
-int main() {	
-	// N é o tamanho do array
-	int N = 20;
+int main() {
+	pthread_t threads_initializer;
+	// Primeira thread
+	Parameters initial_parameter;
 	
-	// Função que chama as threads
-	begin_quicksort(N-1);
+	int i, option, N;
 	
-	int i;
-	for(i=0; i<20; i++)
-		printf("arr[%d] = %d\n", i, array[i]);
+	printf("\tWelcome to parallel Quicksort!\n\n");
+	sleep(1);
+	printf("\tPlease choose one of the following options:\n");
+	printf("\t1. Input your own array!\n");
+	printf("\tX. Test this program with the default array -- no input needed!\n");
+	
+	scanf("%d", &option);
+	
+	if(option==1) {
+		printf("\n\tSelect your array size (maximum size: 100)\n");
+		scanf("%d", &N);
+		
+		printf("\tSelect your SLEEP TIME in seconds (so you can see the swaps)\n");
+		scanf("%d", &SLEEP_TIME);
+		
+		printf("\tInput your array %d values\n", N);
+		for(i=0; i<N; i++)
+			scanf("%d", &array[i]);
+			
+		// Array customizado vai de 0 a N-1
+		initial_parameter.left = 0;
+		initial_parameter.right = N-1;
+		
+		pthread_create(&threads_initializer, NULL, begin_quicksort, &initial_parameter);
+		//pthread_join(threads_initializer, NULL);
+					
+	} else {
+		printf("\tSelected default mode!\n");
+		printf("\tSelect your SLEEP TIME in seconds (so you can see the swaps)\n");
+		scanf("%d", &SLEEP_TIME);
+		
+		// Array padrão vai de 0 a 19
+		N = 20;
+		initial_parameter.left = 0;
+		initial_parameter.right = 19;
+		
+		// Carregando array padrão no array a ser ordenado
+		for(i=0; i<20; i++)
+			array[i]=default_array[i];
+		
+		pthread_create(&threads_initializer, NULL, begin_quicksort, &initial_parameter);
+			
+	}
+	pthread_join(threads_initializer, NULL);
+	printf("\n\n\t FINAL ARRAY:\n");
+	for(i=0; i<N; i++)
+		printf("%d ", array[i]);
 	
 	return 0;
 }
