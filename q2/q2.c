@@ -21,7 +21,7 @@ typedef struct partition {
 } Partition;
 
 //int array[] = {-11,-9,1,-4,14,3,24,-6,-8,-17,9,25,20,-24,-13,10,17,-19,8,21};
-int array[] = {0, 14,16,26,21,39,28,49,19,17,8,34,50,45,1,12,35,42,6,33,46};
+int array[] = {14,16,26,21,39,28,49,19,17,8,34,50,45,1,12,35,42,6,33,46};
 void swap(int a, int b) {int aux=array[a]; array[a]=array[b]; array[b]=aux;}
 
 Partition partition(int l, int r) {
@@ -47,7 +47,7 @@ void quicksort(int l, int r, int thread_number) {
 	Partition a = partition(l, r);
 	int pivot = a.pivot, i = a.i, j = a.j;
 	
-	printf("[Thread %d] left=%d\tpivot=%d\tright=%d\n", thread_number, array[l], array[pivot], array[r]);
+	printf("[Thread %d] left=%d\tpivot=%d\tright=%d\n", thread_number, l, pivot, r);
 	
 	if(j>l)
 		quicksort(l, j-1, thread_number);
@@ -63,7 +63,7 @@ void *threaded_quicksort(void *in) {
 	Partition a = partition(l, r);
 	int pivot = a.pivot, i = a.i, j = a.j;
 	
-	printf("[Thread %d] left=%d\tpivot=%d\tright=%d\n", parameters->thread_number, array[l], array[pivot], array[r]);
+	printf("[Thread %d] left=%d\tpivot=%d\tright=%d\n", parameters->thread_number, l, pivot, r);
 	
 	if(j>l)
 		quicksort(l, j-1, parameters->thread_number);
@@ -76,10 +76,10 @@ void begin_quicksort(int n) {
 	Partition a = partition(0, n);
 	Parameters parameters[2];
 	
-	parameters[0].left = 1;			parameters[0].right = a.pivot-1;	parameters[0].thread_number=0;
+	parameters[0].left = 0;			parameters[0].right = a.pivot;	parameters[0].thread_number=0;
 	parameters[1].left = a.pivot+1;	parameters[1].right = n;			parameters[1].thread_number=1;
 	
-	printf("[Begin] left=%d\tpivot=%d\tright=%d\n", array[1], array[a.pivot], array[n]);
+	printf("[Begin] left=%d\tpivot=%d\tright=%d\n", 0, a.pivot, n);
 	
 	if(a.j>0)
 		pthread_create(&threads[0], NULL, threaded_quicksort, &parameters[0]);
@@ -98,10 +98,10 @@ int main() {
 	int N = 20;
 	
 	// Função que chama as threads
-	begin_quicksort(N);
+	begin_quicksort(N-1);
 	
 	int i;
-	for(i=1; i<21; i++)
+	for(i=0; i<20; i++)
 		printf("arr[%d] = %d\n", i, array[i]);
 	
 	return 0;
