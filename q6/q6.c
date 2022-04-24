@@ -12,14 +12,33 @@ int iterations_array[FINAL];
 
 void fill_array(int chunk_size) {
 	int j, i=INICIO;
-	int id=0;
+	int id;
 	
-	while (i<FINAL) {
-		for(j=i; j<i+chunk_size; j+=PASSO)
-			iterations_array[j]=id;
-		i+=chunk_size;
-		if(id==OMP_NUM_THREADS-1) id=0;
-		else id++;
+	// Distribuindo iterações enquanto ainda tem espaço para distribuir um chunk para todas threads
+	while((i+chunk_size*OMP_NUM_THREADS) < FINAL) {
+		for(id=0; id<OMP_NUM_THREADS; id++) {
+			for(j=i; j<i+chunk_size; j+=PASSO)
+				iterations_array[j]=id;
+				
+			i+=chunk_size;
+		}
+	}
+	
+	// Distribuindo iterações quando não sobrou espaço o suficiente para um chunk para cada thread
+	// iter é o número (inteiro) de iterações restantes para cada thread
+	// remainder é o numero deiterações restantes que também devem ser distribuídas
+	int iter = (FINAL-i) / OMP_NUM_THREADS,
+		remainder = (FINAL-i) % OMP_NUM_THREADS;
+	//printf("i = %d\niter = %d\nremainder = %d\n", i, iter, remainder);
+	
+	while(i < FINAL) {
+		for(id=0; id<OMP_NUM_THREADS; id++) {
+			for(j=i; j<i+((iter) + (remainder>0)); j+=PASSO)
+				iterations_array[j]=id;
+				
+			i+=((iter) + (remainder>0));
+			remainder--;
+		}
 	}
 }
 
@@ -90,7 +109,7 @@ void omp_for(int inicio, int passo, int final, int schedule, int chunk_size, voi
 		for(i=0; i<OMP_NUM_THREADS; i++)
 			pthread_join(threads[i], NULL);	
 		
-		
+		for(i=0; i<FINAL; i++) printf("%d: %d\n", i, iterations_array[i]);
 	} else if(schedule==2) {
 		// Dynamic schedule
 	} else {
