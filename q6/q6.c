@@ -5,13 +5,40 @@
 #define OMP_NUM_THREADS 4
 
 #define INICIO 0
-#define FINAL 10
+#define FINAL 100
 #define PASSO 1
+
+int iterations_array[FINAL];
+
+void fill_array(int chunk_size) {
+	int j, i=INICIO;
+	int id=0;
+	
+	while (i<FINAL) {
+		for(j=i; j<i+chunk_size; j+=PASSO)
+			iterations_array[j]=id;
+		i+=chunk_size;
+		if(id==OMP_NUM_THREADS-1) id=0;
+		else id++;
+	}
+}
+
+int find_final(int id) {
+	int i=FINAL-1;
+	
+	while(1) {
+		if(iterations_array[i]==id)
+			return i;
+		i--;
+	}
+}
 
 typedef struct Parameters {
 	int inicio;
 	int passo;
 	int final;
+	int chunk;
+	int id;
 	void (*function) (int);
 }Parameters;
 
@@ -19,31 +46,43 @@ void *func_thread(void* in) {
 	Parameters *parameters = in;
 	int inicio = parameters->inicio,
 		passo = parameters->passo,
-		final = parameters->final;
+		final = parameters->final,
+		id = parameters->id,
+		chunk_size = parameters->chunk;
 		
-	int i;
-	for(i=parameters->inicio; i<parameters->final; i+=parameters->passo)
-		parameters->function (i);
+	int i=inicio, j;
+	while(i<=final) {
+		for(j=i; j<i+chunk_size; j++) {
+			printf("[Thread %d]", id);
+			parameters->function (j);
+		}
+		
+		i+=chunk_size*OMP_NUM_THREADS;
+	}
+		
 }
 
 void omp_for(int inicio, int passo, int final, int schedule, int chunk_size, void (*f) (int))  {
+	
 	pthread_t threads[OMP_NUM_THREADS];
 	Parameters parameters[OMP_NUM_THREADS];
-	parameters[0].passo 	= parameters[1].passo	  = parameters[2].passo		= parameters[3].passo		= passo;
-	parameters[0].function = parameters[1].function = parameters[2].function = parameters[3].function	= f;
-	// Static schedule
+	
 	if(schedule==1) {
+		// Static schedule
+		fill_array(chunk_size);
+		
 		int i;
 		for(i=0; i<OMP_NUM_THREADS; i++) {
-			parameters[i].inicio = inicio + i*chunk_size;
-			
-			int h=0, k=parameters[i].inicio;
-			while((k + chunk_size + h*chunk_size*OMP_NUM_THREADS) <= final) h++;
-			parameters[i].final = k + chunk_size + (h-1)*chunk_size*OMP_NUM_THREADS;
+			parameters[i].inicio	= inicio + i*chunk_size;
+			parameters[i].passo		= passo;
+			parameters[i].final		= find_final(i);
+			parameters[i].chunk		= chunk_size;
+			parameters[i].id		= i;
+			parameters[i].function	= f;
 		}
 		
-		//for(i=0; i<OMP_NUM_THREADS; i++)
-		//	printf("%d %d\n", parameters[i].inicio, parameters[i].final);
+		for(i=0; i<OMP_NUM_THREADS; i++)
+			printf("%d %d\n", parameters[i].inicio, parameters[i].final);
 		
 		for(i=0; i<OMP_NUM_THREADS; i++)
 			pthread_create(&threads[i], NULL, func_thread, &parameters[i]);
@@ -51,20 +90,18 @@ void omp_for(int inicio, int passo, int final, int schedule, int chunk_size, voi
 		for(i=0; i<OMP_NUM_THREADS; i++)
 			pthread_join(threads[i], NULL);	
 		
-		// Dynamic schedule
+		
 	} else if(schedule==2) {
-		
-		
-		
-		// Guided schedule
+		// Dynamic schedule
 	} else {
-		
-		
-		
-		
+		// Guided schedule
 	}
 	//f(3);
 	//(parameters[0].function) (4);
+}
+
+void simple_print(int n) {
+	printf("%d\n", n);
 }
 
 void polygon (int n) {
@@ -88,7 +125,7 @@ int main() {
 		scanf("%d", &chunk_size);
 	} while(chunk_size<1);
 	
-	omp_for(INICIO, PASSO, FINAL, schedule, chunk_size, polygon);
+	omp_for(INICIO, PASSO, FINAL, schedule, chunk_size, simple_print);
 	
 	return 0;
 }
