@@ -2,15 +2,34 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-#define OMP_NUM_THREADS 4
+#define OMP_NUM_THREADS 3
 
 #define INICIO 0
 #define FINAL 100
 #define PASSO 1
 
-int iterations_array[FINAL];
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_t threads[OMP_NUM_THREADS];
 
-void fill_array(int chunk_size) {
+typedef struct Parameters {
+	int inicio;
+	int passo;
+	int final;
+	int chunk;
+	int id;
+	void (*function) (int);
+}Parameters;
+
+Parameters parameters[OMP_NUM_THREADS];
+	
+int iterations_array[FINAL];
+int next_iter = INICIO;
+
+void iterations_history() {
+	// Printa o histórico de iterações
+}
+
+void fill_iterations_array(int chunk_size) {
 	int j, i=INICIO;
 	int id;
 	
@@ -42,7 +61,7 @@ void fill_array(int chunk_size) {
 	}
 }
 
-int find_final(int id) {
+int get_final(int id) {
 	int i=FINAL-1;
 	
 	while(1) {
@@ -52,16 +71,7 @@ int find_final(int id) {
 	}
 }
 
-typedef struct Parameters {
-	int inicio;
-	int passo;
-	int final;
-	int chunk;
-	int id;
-	void (*function) (int);
-}Parameters;
-
-void *func_thread(void* in) {
+void *run_static(void* in) {
 	Parameters *parameters = in;
 	int inicio = parameters->inicio,
 		passo = parameters->passo,
@@ -71,7 +81,7 @@ void *func_thread(void* in) {
 		
 	int i=inicio, j;
 	while(i<=final) {
-		for(j=i; j<i+chunk_size; j++) {
+		for(j=i; j<(i+chunk_size); j+=PASSO) {
 			printf("[Thread %d]", id);
 			parameters->function (j);
 		}
@@ -81,37 +91,78 @@ void *func_thread(void* in) {
 		
 }
 
-void omp_for(int inicio, int passo, int final, int schedule, int chunk_size, void (*f) (int))  {
+void *run_dynamic(void* in) {
+	Parameters *parameters = in;
+	int i, iter=0,
+		id			= parameters->id,
+		chunk_size	= parameters->chunk;
+		
+	// Entrando na região crítica
+	pthread_mutex_lock(&mutex);
+	iter = next_iter;
+	next_iter += chunk_size;
+	pthread_mutex_unlock(&mutex);
+		
+	while(iter < FINAL) {
+		
+		for(i=iter; (i<(iter+chunk_size)) && i<FINAL ; i+=PASSO) {
+			printf("[Thread %d]", id);
+			parameters->function (i);
+		}
+		
+		// Buscando a nova iteração
+		pthread_mutex_lock(&mutex);
+		iter = next_iter;
+		next_iter += chunk_size;
+		pthread_mutex_unlock(&mutex);
+	}
+}
+
+void omp_for(int inicio, int passo, int final, int schedule, int chunk_size, void (*f) (int)) {
 	
-	pthread_t threads[OMP_NUM_THREADS];
-	Parameters parameters[OMP_NUM_THREADS];
+	
 	
 	if(schedule==1) {
 		// Static schedule
-		fill_array(chunk_size);
+		fill_iterations_array(chunk_size);
 		
 		int i;
 		for(i=0; i<OMP_NUM_THREADS; i++) {
-			parameters[i].inicio	= inicio + i*chunk_size;
+			parameters[i].inicio	= inicio + (i*chunk_size);
 			parameters[i].passo		= passo;
-			parameters[i].final		= find_final(i);
+			parameters[i].final		= get_final(i);
+			parameters[i].chunk		= chunk_size;
+			parameters[i].id		= i;
+			parameters[i].function	= f;
+		}
+		
+		//for(i=0; i<OMP_NUM_THREADS; i++)
+		//	printf("%d %d\n", parameters[i].inicio, parameters[i].final);
+		
+		for(i=0; i<OMP_NUM_THREADS; i++)
+			pthread_create(&threads[i], NULL, run_static, &parameters[i]);
+			
+		for(i=0; i<OMP_NUM_THREADS; i++)
+			pthread_join(threads[i], NULL);	
+		
+		//for(i=0; i<FINAL; i++)
+		//	printf("%d: %d\n", i, iterations_array[i]);
+	} else if(schedule==2) {
+		// Dynamic schedule
+		
+		int i;
+		for(i=0; i<OMP_NUM_THREADS; i++) {
 			parameters[i].chunk		= chunk_size;
 			parameters[i].id		= i;
 			parameters[i].function	= f;
 		}
 		
 		for(i=0; i<OMP_NUM_THREADS; i++)
-			printf("%d %d\n", parameters[i].inicio, parameters[i].final);
-		
-		for(i=0; i<OMP_NUM_THREADS; i++)
-			pthread_create(&threads[i], NULL, func_thread, &parameters[i]);
+			pthread_create(&threads[i], NULL, run_dynamic, &parameters[i]);
 			
 		for(i=0; i<OMP_NUM_THREADS; i++)
-			pthread_join(threads[i], NULL);	
+			pthread_join(threads[i], NULL);
 		
-		for(i=0; i<FINAL; i++) printf("%d: %d\n", i, iterations_array[i]);
-	} else if(schedule==2) {
-		// Dynamic schedule
 	} else {
 		// Guided schedule
 	}
