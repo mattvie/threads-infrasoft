@@ -1,5 +1,5 @@
 # threads-infrasoft
-Projeto de Threads, da cadeira de Infraestrutura de Software - CIn/UFPE
+Projeto de Threads, da cadeira de Infraestrutura de Software - 2021.2 - CIn/UFPE
 
 Equipe:
 - Mateus Viégas Martins Farias (mvmf)
