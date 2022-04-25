@@ -3,25 +3,24 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <stdbool.h>
 
-#define P 20	//numero de iterações
-#define NUM_VARIAVEIS 4	// numero de variaveis
+#define P 20	//numero de iteracoes
+#define NUM_VARIAVEIS 4
 
 double matrix_A[NUM_VARIAVEIS][NUM_VARIAVEIS] = {{2,1,1,1}, {1, 2, 1,1}, {1, 1, 2, 1},{1,1,1,2}};	//resposta deste SEL: {-1, 0, 1, 2}
 double matrix_B[NUM_VARIAVEIS] = {1,2,3,4};
 double matrix_X[NUM_VARIAVEIS] = {1,1,1,1};
 
-double Res[NUM_VARIAVEIS]={0,0,0,0};	//variavel auxiliar para calcular x[i] em cada iteraÃ§Ã£o
-int N = 0;			//numero de cores
+double Res[NUM_VARIAVEIS]={0,0,0,0};	// Aqui fica guardada a resposta
+int N = 0;
 int next = 0;
-int interations = 0;
-int blocked = 0;
-
+int iterations = 0;
+bool blocked = false;
 
 pthread_mutex_t mutex;
 pthread_cond_t waiter = PTHREAD_COND_INITIALIZER;
 pthread_barrier_t execute_barrier;
-
 
 double Sum(int tId) {
 	int j=0;
@@ -39,8 +38,7 @@ double Sum(int tId) {
 
 void run_jacobi(int varIndex, int threadId) {
 	matrix_X[varIndex] = ( 1 / matrix_A[varIndex][varIndex]) * (matrix_B[varIndex] - Sum(varIndex));
-    //Res[varIndex] = ( 1 / matrix_A[varIndex][varIndex]) * (matrix_B[varIndex]);
-	//x[varIndex] = Res[varIndex];
+
 	printf("[Thread #%d][Variavel #%d] x[%d]=%f\n", threadId, varIndex, varIndex, matrix_X[varIndex]);
 }
 
@@ -49,10 +47,10 @@ void *run_thread(void *tid) {
 	int s = 0;
     int toExec;
     
-    while (interations <= P)
-    {
-        pthread_mutex_lock(&mutex);
-        if (blocked == 1 || interations > P){
+    while (iterations <= P) {
+        // Entrando na regi�o cr�tica
+		pthread_mutex_lock(&mutex);
+        if (blocked || iterations>P){
             pthread_mutex_unlock(&mutex);
         }
         else
@@ -61,8 +59,8 @@ void *run_thread(void *tid) {
             next++;
 
             if (next == NUM_VARIAVEIS){
-                interations++;
-                blocked = 1;
+                iterations++;
+                blocked = true;
                 next = 0;
             }
             pthread_mutex_unlock(&mutex);
@@ -70,7 +68,7 @@ void *run_thread(void *tid) {
         }
         
         pthread_barrier_wait (&execute_barrier);
-        blocked = 0;
+        blocked = false;
     }
 }
 
@@ -100,7 +98,7 @@ int	main(int argc, char *argv[]) {
         
     }
 printf("\nTempo:%f\n",(clock() - tempo) / (double)CLOCKS_PER_SEC);
-	while(interations <= P){
+	while(iterations <= P){
 
     }
 
@@ -108,8 +106,9 @@ printf("\nTempo:%f\n",(clock() - tempo) / (double)CLOCKS_PER_SEC);
         pthread_cancel(threads[i]);
     }
   
-	return 0;	//com 1 processador:   Tempo:0.000157
-            //com 2 processadores: Tempo:0.000212
-            //com 4 processadores: Tempo:0.000329
-            //com 8 processadores: Tempo:0.000738
+	return 0;
+	//com 1 processador:   Tempo:0.000157
+    //com 2 processadores: Tempo:0.000212
+    //com 4 processadores: Tempo:0.000329
+    //com 8 processadores: Tempo:0.000738
 }

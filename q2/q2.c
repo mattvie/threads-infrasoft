@@ -2,14 +2,12 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
-#include <time.h>
 
 # define MAX_SIZE 100
 
 typedef struct arguments {
 	int left;
 	int right;
-	int thread_number;
 } Parameters;
 
 // Array de testes
@@ -54,8 +52,6 @@ int partition(int l, int r) {
 		swap(r, i, j);
 				
 		if(i>=j) {
-			printf("[Desfazendo swap quando %d>=%d]\n", array[i], array[j]);
-			printf("[i=%d   j=%d]\n", i, j);
 			swap(r, i, j);
 			swap(r, l, j);
 			return j;
@@ -63,52 +59,33 @@ int partition(int l, int r) {
 	}	
 }
 
-void quicksort(int l, int r, int thread_number) {
-	if(l < r) {
-		printf("[On thread %d][left=%d   right=%d]\n", thread_number, l, r);
-		
-		int pivot = partition(l, r);
-		quicksort(l, pivot-1, thread_number);
-		quicksort(pivot+1, r, thread_number);
-	}
-}
-
 void *threaded_quicksort(void *in) {
-	Parameters* parameters = in;
-	int l = parameters->left,
-		r = parameters->right;
-	
-	if(l < r) {
-		printf("[On thread %d][left=%d   right=%d]\n", parameters->thread_number, l, r);
-		
-		int pivot = partition(l, r);
-		quicksort(l, pivot-1, parameters->thread_number);
-		quicksort(pivot+1, r, parameters->thread_number);
-	}
-}
-
-void *begin_quicksort(void *in) {
+	Parameters parameters;
 	Parameters* initial_parameters = in;
 	int l = initial_parameters->left,
 		r = initial_parameters->right;
-
-	int pivot = partition(l, r);
-	Parameters parameters[2];
+	printf("[On thread][left=%d   right=%d]\n", l, r);
 	
-	parameters[0].left = l;			parameters[0].right = pivot;		parameters[0].thread_number=0;
-	parameters[1].left = pivot+1;	parameters[1].right = r;			parameters[1].thread_number=1;
-	
-	printf("[Start][left=%d   right=%d]\n", l, r);
-	//print_array(r);
-	pthread_t threads[2];
-	//thread[0] no lado esquerdo
-	//thread[1] no lado direito
-	
-	pthread_create(&threads[0], NULL, threaded_quicksort, &parameters[0]);
-	pthread_create(&threads[1], NULL, threaded_quicksort, &parameters[1]);
+	if(l < r) {
+		pthread_t thread;
 		
-	pthread_join(threads[0], NULL);
-    pthread_join(threads[1], NULL);
+		// Setando pivot
+		int pivot = partition(l, r);
+		
+		// Setando parâmetros para o lado esquerdo do pivot
+		parameters.left = l;
+		parameters.right = pivot-1;
+	
+		pthread_create(&thread, NULL, threaded_quicksort, &parameters);
+		pthread_join(thread, NULL);
+		
+		// Setando parâmetros para o lado direito do pivot
+		parameters.left = pivot+1;
+		parameters.right = r;
+		
+		pthread_create(&thread, NULL, threaded_quicksort, &parameters);
+		pthread_join(thread, NULL);
+	}
 }
 
 int main() {
@@ -119,7 +96,6 @@ int main() {
 	int i, option, N;
 	
 	printf("\tWelcome to parallel Quicksort!\n\n");
-	sleep(1);
 	printf("\tPlease choose one of the following options:\n");
 	printf("\t1. Input your own array!\n");
 	printf("\tX. Test this program with the default array -- no input needed!\n");
@@ -127,44 +103,46 @@ int main() {
 	scanf("%d", &option);
 	
 	if(option==1) {
+		printf("\tSelected custom mode!\n");
 		printf("\n\tSelect your array size (maximum size: 100)\n");
 		scanf("%d", &N);
 		
-		printf("\tSelect your SLEEP TIME in seconds (so you can see the swaps)\n");
+		printf("\tSelect your SLEEP TIME in seconds (that way you can see the swaps)\n");
 		scanf("%d", &SLEEP_TIME);
 		
 		printf("\tInput your array %d values\n", N);
 		for(i=0; i<N; i++)
 			scanf("%d", &array[i]);
 			
-		// Array customizado vai de 0 a N-1
+		// Array customizado vai de 0 a N
 		initial_parameter.left = 0;
 		initial_parameter.right = N-1;
 		
-		pthread_create(&threads_initializer, NULL, begin_quicksort, &initial_parameter);
-		//pthread_join(threads_initializer, NULL);
-					
+		pthread_create(&threads_initializer, NULL, threaded_quicksort, &initial_parameter);
+							
 	} else {
 		printf("\tSelected default mode!\n");
-		printf("\tSelect your SLEEP TIME in seconds (so you can see the swaps)\n");
+		printf("\tSelect your SLEEP TIME in seconds (that way you can see the swaps)\n");
 		scanf("%d", &SLEEP_TIME);
 		
-		// Array padrão vai de 0 a 19
+		// Array padrão vai de 0 a 20
 		N = 20;
 		initial_parameter.left = 0;
-		initial_parameter.right = 19;
+		initial_parameter.right = N-1;
 		
 		// Carregando array padrão no array a ser ordenado
 		for(i=0; i<20; i++)
 			array[i]=default_array[i];
 		
-		pthread_create(&threads_initializer, NULL, begin_quicksort, &initial_parameter);
-			
+		pthread_create(&threads_initializer, NULL, threaded_quicksort, &initial_parameter);	
 	}
+	
 	pthread_join(threads_initializer, NULL);
+	
 	printf("\n\n\t FINAL ARRAY:\n");
 	for(i=0; i<N; i++)
 		printf("%d ", array[i]);
 	
 	return 0;
 }
+
