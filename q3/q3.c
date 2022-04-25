@@ -18,6 +18,7 @@ int next = 0;
 int iterations = 0;
 bool blocked = false;
 
+pthread_t threads[NUM_VARIAVEIS];
 pthread_mutex_t mutex;
 pthread_cond_t waiter = PTHREAD_COND_INITIALIZER;
 pthread_barrier_t execute_barrier;
@@ -27,16 +28,15 @@ double Sum(int tId) {
 	double varSum=0;
 	
 	while(j<NUM_VARIAVEIS) {
-		if(j != tId) {
+		if(j != tId)
 			varSum += matrix_A[tId][j] * matrix_X[j];
-		}
 		j++;
 	}
 	
 	return varSum;
 }
 
-void run_jacobi(int varIndex, int threadId) {
+void jacobi(int varIndex, int threadId) {
 	matrix_X[varIndex] = ( 1 / matrix_A[varIndex][varIndex]) * (matrix_B[varIndex] - Sum(varIndex));
 
 	printf("[Thread #%d][Variavel #%d] x[%d]=%f\n", threadId, varIndex, varIndex, matrix_X[varIndex]);
@@ -64,7 +64,7 @@ void *run_thread(void *tid) {
                 next = 0;
             }
             pthread_mutex_unlock(&mutex);
-            run_jacobi(toExec, threadId);
+            jacobi(toExec, threadId);
         }
         
         pthread_barrier_wait (&execute_barrier);
@@ -72,21 +72,16 @@ void *run_thread(void *tid) {
     }
 }
 
-int	main(int argc, char *argv[]) {
-	pthread_t threads[NUM_VARIAVEIS];
-  clock_t tempo;
+int	main() {
+  	clock_t tempo;
 	tempo = clock();
 
-	//pthread_mutex_init(&mutex, NULL);
-	int *taskids[NUM_VARIAVEIS];
+	int *taskids[NUM_VARIAVEIS], i;
 	
-	int 
-		i = 0,	//auxilia "for" para criar threads
-		u = 0, 	//auxilia "for" das iteracoes
-		k = 0;	//auxilia "for" para atualizar valor de x[i]
-		
-	printf("Digite o numero de threads/processadores: ");
-	scanf("%d", &N);
+	do {
+		printf("Informe o numero de processadores (max size %d): ", NUM_VARIAVEIS);
+		scanf("%d", &N);
+	} while(N<0 && N>=NUM_VARIAVEIS);
 
 	pthread_barrier_init (&execute_barrier, NULL, N);
 
@@ -94,18 +89,14 @@ int	main(int argc, char *argv[]) {
         taskids[i] = (int *) malloc(sizeof(int));
         *taskids[i] = i;
 
-        pthread_create(&threads[i], NULL, run_thread, (void *)taskids[i]);
-        
-    }
-printf("\nTempo:%f\n",(clock() - tempo) / (double)CLOCKS_PER_SEC);
-	while(iterations <= P){
-
+        pthread_create(&threads[i], NULL, run_thread, taskids[i]);
     }
 
-    for(i=0 ; i<N ; i++) {
-        pthread_cancel(threads[i]);
-    }
+    for(i=0 ; i<N ; i++)
+        pthread_join(threads[i], NULL);
   
+  	// Obs: executar o programa algumas vezes, só então os valores de tempo ficam uniformes
+  	printf("\nExec time: %.2f\n", (clock() - tempo)/((double) CLOCKS_PER_SEC));
 	return 0;
 	//com 1 processador:   Tempo:0.000157
     //com 2 processadores: Tempo:0.000212
